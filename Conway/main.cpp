@@ -40,7 +40,6 @@ std::vector<float> vertices;
 
 //int initialize()
 //{
-//
 //}
 
 int main(void)
