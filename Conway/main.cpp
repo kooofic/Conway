@@ -4,9 +4,17 @@
 #include <iostream>
 #include <vector>
 
-const int numberOfSeparators = 80;
+constexpr int numberOfSeparators = 80;
+constexpr int windowWidth        = 1200;
+constexpr int windowHeight       = 1200;
+constexpr float viewPortLeft     = -1.0f;
+constexpr float viewPortRight    = 1.0f;
+constexpr float viewPortTop      = 1.0f; 
+constexpr float viewPortBottom   = -1.0f;
+constexpr float viewPortSize     = 2.0f;
+constexpr float gridSquareSize   = viewPortSize / numberOfSeparators;
 
-const char* vertexShaderSource = "#version 330 core\n"
+constexpr const char* vertexShaderSource = "#version 330 core\n"
 "layout (location = 0) in vec3 aPos;\n"
 "uniform vec2 trans;"
 "void main()\n"
@@ -14,7 +22,7 @@ const char* vertexShaderSource = "#version 330 core\n"
 "   gl_Position = vec4(aPos.x + trans.x, aPos.y + trans.y, aPos.z, 1.0);\n"
 "}\0";
 
-const char* fragmentShaderSource = "#version 330 core\n"
+constexpr const char* fragmentShaderSource = "#version 330 core\n"
 "out vec4 FragColor;\n"
 "void main()\n"
 "{\n"
@@ -55,10 +63,12 @@ static void mouse_button_callback(GLFWwindow* window, int button, int action, in
         double xpos, ypos;
         //getting cursor position
         glfwGetCursorPos(window, &xpos, &ypos);
-		int x = (int)( (xpos / 1200.0f) * numberOfSeparators );
-		int y = (int)( ( ( 1200 - ypos ) / 1200.0f) * numberOfSeparators );
-		mapGrid[y][x] = !mapGrid[y][x];
+		int x = (int)( (xpos / windowWidth) * numberOfSeparators );
+		int y = (int)( ( (windowHeight - ypos ) / windowHeight) * numberOfSeparators );
 
+		if (x < 0 || x >= numberOfSeparators || y < 0 || y >= numberOfSeparators) return;
+
+		mapGrid[y][x] = !mapGrid[y][x];
 
     }
 }
@@ -68,7 +78,7 @@ unsigned createShaderProgram(const char* vertexShaderCode, const char* fragmentS
     unsigned int vertexShader;
     vertexShader = glCreateShader(GL_VERTEX_SHADER);
 
-    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+    glShaderSource(vertexShader, 1, &vertexShaderCode, NULL);
     glCompileShader(vertexShader);
 
     int  success;
@@ -84,7 +94,7 @@ unsigned createShaderProgram(const char* vertexShaderCode, const char* fragmentS
 
     unsigned int fragmentShader;
     fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+    glShaderSource(fragmentShader, 1, &fragmentShaderCode, NULL);
     glCompileShader(fragmentShader);
 
     glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
@@ -154,7 +164,7 @@ GLFWwindow* init()
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     glfwSwapInterval(1);
-    glViewport(0, 0, 1200, 1200);
+    glViewport(0, 0, windowWidth, windowHeight);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
     return window;
@@ -166,40 +176,40 @@ struct vec2
 	float y = 0.0f;
 };
 
-class Grid
+class Drawable
+{
+public:
+        virtual void draw(int translationLocation) = 0;
+};
+
+class Grid : public Drawable
 {
     std::vector<float> vertices;
     unsigned int vbo;
     unsigned int vao;
 
-
-
-    Grid() = delete;
-
 public:
 
-    Grid(int gridSize)
+    Grid()
     {
         for (int i = 0; i < numberOfSeparators; i++)
         {
-            float x = -1.0f + (2.0f / numberOfSeparators) * i;
+            float x = viewPortLeft + gridSquareSize * i;
 
             this->vertices.push_back(x);
-            this->vertices.push_back(1.0f);
+            this->vertices.push_back(viewPortTop);
             this->vertices.push_back(0.0f);
             this->vertices.push_back(x);
-            this->vertices.push_back(-1.0f);
+            this->vertices.push_back(viewPortBottom);
             this->vertices.push_back(0.0f);
 
-            this->vertices.push_back(1.0f);
+            this->vertices.push_back(viewPortRight);
             this->vertices.push_back(x);
             this->vertices.push_back(0.0f);
-            this->vertices.push_back(-1.0f);
+            this->vertices.push_back(viewPortLeft);
             this->vertices.push_back(x);
             this->vertices.push_back(0.0f);
         }
-        
-		this->vertices.shrink_to_fit();
 
         glGenBuffers(1, &this->vbo);
         glGenVertexArrays(1, &this->vao);
@@ -213,7 +223,7 @@ public:
     }
 
     //I have a single shader, so I won't need to bind it.
-    void Draw(int translationLocation)
+    void draw(int translationLocation)
     {
         glUniform2f(translationLocation, 0.0f, 0.0f);
 
@@ -223,8 +233,7 @@ public:
     }
 };
 
-
-class Squares
+class Squares : public Drawable
 {
     float vertices[12];
 
@@ -239,26 +248,24 @@ class Squares
     unsigned int vao;
     unsigned int ebo;
 
-
-	Squares() = delete;
 public:
 
-    Squares(float size)
+    Squares()
     {
         vertices[0]= 0.0f;
         vertices[1]= 0.0f;
         vertices[2]= 0.0f;
 
-        vertices[3]= 0.0f + size;
+        vertices[3]= 0.0f + gridSquareSize;
         vertices[4]= 0.0f;
         vertices[5]= 0.0f;
 
         vertices[6]= 0.0f;
-        vertices[7]= 0.0f + size;
+        vertices[7]= 0.0f + gridSquareSize;
         vertices[8]= 0.0f;
 
-        vertices[9] = 0.0f + size;
-        vertices[10]= 0.0f + size;
+        vertices[9] = 0.0f + gridSquareSize;
+        vertices[10]= 0.0f + gridSquareSize;
         vertices[11]= 0.0f;
 
 
@@ -296,7 +303,7 @@ public:
 	};
 
     //I have a single shader, so I won't need to bind it.
-    void Draw(int translationLocation)
+    void draw(int translationLocation)
     {
         if (translations.size() == 0) return;
 
@@ -310,8 +317,6 @@ public:
         glBindVertexArray(0);
     }
 };
-
-std::vector<float> vertices;
 
 int main(void)
 {
@@ -330,11 +335,17 @@ int main(void)
         return e;
     }
 
-	Grid grid(numberOfSeparators);
-	Squares square(2.0f/numberOfSeparators);
+	Grid grid;
+	Squares square;
 
+	std::vector<Drawable*> drawables;
 
-    const double fpsLimit = 1.0 / 15.0;
+	drawables.push_back(&grid);
+	drawables.push_back(&square);
+
+    int translationLocation = glGetUniformLocation(shaderProgram, "trans");
+
+    constexpr double fpsLimit = 1.0 / 15.0;
     double lastUpdateTime = 0;  // number of seconds since the last loop
     double lastFrameTime = 0;   // number of seconds since the last frame
 
@@ -343,14 +354,11 @@ int main(void)
     {
 
         double now = glfwGetTime();
-        double deltaTime = now - lastUpdateTime;
 
         if ((now - lastFrameTime) >= fpsLimit)
         {
             /* Render here */
             glClear(GL_COLOR_BUFFER_BIT);
-
-
 
             //Conways Game of Life logic
             if (simulationRunning)
@@ -402,8 +410,8 @@ int main(void)
                 {
                     if (mapGrid[i][j])
                     {
-                        float x = -1.0f + (2.0f / numberOfSeparators) * j;
-                        float y = -1.0f + (2.0f / numberOfSeparators) * i;
+                        float x = viewPortLeft + gridSquareSize * j;
+                        float y = viewPortBottom + gridSquareSize * i;
                         square.addTranslation(x, y);
                     }
                 }
@@ -411,10 +419,10 @@ int main(void)
 
             glUseProgram(shaderProgram);
 
-            int translationLocation = glGetUniformLocation(shaderProgram, "trans");
-
-            grid.Draw(translationLocation);
-            square.Draw(translationLocation);
+            for (int i = 0; i < drawables.size(); i++)
+            {
+				drawables[i]->draw(translationLocation);
+            }
 
 
             /* Swap front and back buffers */
